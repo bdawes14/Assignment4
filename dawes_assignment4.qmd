@@ -1,0 +1,158 @@
+---
+title: "Simulated cohort analysis of smoking effects on cardiac disease and healthcare costs"
+author: "Brian Dawes"
+format: 
+  docx:
+    fig-width: 6
+    fig-height: 4
+    fig-dpi: 300
+editor: visual
+execute:
+  warning: false
+  message: false
+  echo: false
+---
+
+# Introduction:
+
+Smoking continues to remain a major public health burden worldwide. The effects of smoking on human health have been well studied and include increased rates of various cancers, heat disease, chronic obstructive pulmonary disorder, increased rates of autoimmune vasculidities such as Berger's syndrome, and increased rates of respiratory infections. While the health effects of smoking remain well documented and smoking rates are falling in the United States, it continues to contribute a significant source of mortality, morbidity, and financial burden on the US healthcare system.
+
+Publicly available healtcare data sets offer valuable opportunities to evaluate real world and ongoing impacts of various risk factors. While full individual level data may not be available due to privacy concerns, simulated data which maintains key characteristics of complex data sets offers the ability to evaluate public health impacts while avoiding the need to access health protected information (HPI). Here, we utilize a publicly available simulated data set containing information on smoking, healthcare expenditures, and cardiac disease to analyze ongoing impacts on health within the prior study population.
+
+# Methods
+
+## Data set
+
+Data was obtained via the publicly available data set "cohort.csv" previously obtained from a prior study. This data set contains 5000 observations with recorded information regarding patient gender, smoking status, cardiac disease, and healthcare cost. These data were simulated, and the information from the original data set is not publicaly available, nor are the methods for data simulation to generate this data set. Additionally, no data dictionary was available for this data. Assumptions based on standard naming practices were made, where for the category "smoking", 1 was assumed to mean yes and 0 no, similar assumption was made for "female" with 1 meaning female and 0 meaning male, cardiac disease (1 yes, 0 no), and cost was assumed to represent annual healthcare cost as a standard unit in US dollars. Age was assumed to be reported in years.
+
+## Statistical analysis
+
+All data was analyzed in R/Rstudio version 4.4.1 (2024-06-14) using tidyverse, ggplot2, and gtsummary packages. Basic demographic data were analyzed from the available data set with means and standard deviations calculated for continuous variables.
+
+For prediction for cardiac disease risk we performed multivariable logistic regression analyzing effects of gender, smoking status, and age with reported odds ratios (OR) and 95% confidence interval (95% CI). For predictive modeling of healthcare costs linear regression was used to analyze the effects of gender, smoking, age, and cardiac disease. The effects of smoking on healthcare costs were analyzed using a 2-sided T test. All code used for statistical analysis is available (<https://github.com/bdawes14/Assignment4>). Quartro markdown documents were used in the preparation of this document.
+
+```{r data set up, message=FALSE, warning=FALSE, include=FALSE}
+#Downloading/formatting data
+library(tidyverse)
+library(gtsummary)
+library(ggplot2)
+
+cohort <- read.csv("cohort.csv")
+cohort$smoke <- factor(cohort$smoke, levels = c(0, 1), labels = c("No", "Yes"))
+cohort$female <- factor(cohort$female, levels = c(0, 1), labels = c("Male", "Female"))
+cohort$cardiac <- factor(cohort$cardiac, levels = c(0, 1), labels = c("No", "Yes"))
+
+```
+
+# Results
+
+## Study demographics
+
+This cohort contians 5,000 observations with no missing data. Among the study population 13% reported smoking and 5.5% reported cardiac disease. The average age of participants was 45 years, and 43% were female. Amonth is cohort, average annual heathcare costs were $9,398.
+
+```{r demographic table}
+##Descriptive table of variables
+cohort %>%
+  tbl_summary(statistic = list(all_continuous() ~ "{mean} ± {sd}")) 
+```
+
+Table1: Demographics of study population
+
+## Risk factors for cardiac disease
+In order to determine the effects of the collected health variables on cardiac disease risk we performed a multivariable logistic regression model. Our model revealse significant effects of age, gender, and smoking status on cardiac disease risk. Female gender was protective with an OR of 0.08. Risk per year age was signifiantly associated with increased odds of cardiac disease (OR 1.01) as was smoking status (OR 9.59).
+
+```{r}
+##Predictive models
+#Predicting cardiac disease
+cardiac_model <- glm(cardiac~female + smoke + age, data=cohort, family=binomial)
+model_summary <- summary(cardiac_model)
+cardiac_model %>%
+  tbl_regression(exponentiate = TRUE) %>%
+  add_glance_table(include = c(logLik, AIC)) %>%
+  modify_caption("Prediction Model for Cardiac Disease")
+
+```
+
+Table 2: Multivariable logistic regression of cardiac disease risk
+
+## Effects of smoking, cardiac risk, and gender on healthcare costs
+
+To assess the effects of smoking and cardiac disease on healthcare costs we first analyzed the overall observed effects on healthcare costs. Figures 1 and 2 show the distribution and mean healthcare costs associated with smoking and cardiac disease, respectively. Both smoking and cardiac disease are significantly associated with higher cost. Average cost for non-smokers was $9,323 (393) vs $9,903 (466). For no cardiac disease mean cost was $9350(400) vs $10218(427) for those with cardiac disease.
+
+```{r}
+#Store t-test results for cost by smoking status
+cost_ttest <- t.test(cost ~ smoke, data = cohort)
+
+
+#Create violin plot for healthcare costs by smoking status
+ggplot(cohort, aes(x = smoke, y = cost, fill = smoke)) + 
+  geom_violin(alpha = 0.7, trim = FALSE) + 
+  geom_boxplot(width = 0.2, alpha = 0.8) +
+  
+  # Add significance annotation
+  annotate("text", x = 1.5, y = max(cohort$cost) * 0.95, 
+           label = "p < 0.001 ***", size = 4, fontface = "bold") +
+  
+  labs(
+    title = "Healthcare Cost Distribution by Smoking Status",
+    x = "Smoking Status", 
+    y = "Healthcare Costs (USD)"
+  ) + 
+  scale_fill_manual(values = c("white", "white"), guide = "none") +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    axis.title = element_text(size = 12)
+  )
+```
+Figure 1: Effect of smoking on healthcare cost
+
+```{r}
+cardiac_cost_ttest <- t.test(cost ~ cardiac, data = cohort)
+
+# Create violin plot for cardiac events vs cost
+ggplot(cohort, aes(x = cardiac, y = cost, fill = cardiac)) + 
+  geom_violin(alpha = 0.7, trim = FALSE) + 
+  geom_boxplot(width = 0.2, alpha = 0.8) +
+  annotate("text", x = 1.5, y = max(cohort$cost) * 0.95, 
+           label = "p < 0.001 ***", size = 4, fontface = "bold") +
+  labs(
+    title = "Healthcare Cost Distribution by Cardiac Event Status",
+    x = "Cardiac Events", 
+    y = "Healthcare Costs (USD)"
+  ) + 
+  scale_fill_manual(values = c("white", "white"), guide = "none") +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12)
+  )
+```
+Figure 2: Effect of cardiac disease on healthcare cost
+
+Lastly, we performed a multivariable logistic regression to control for confounding by these two closely related risk factors along with age and gender. We found that being female was associated with $271 reduction in cost copared to being male, while every year of age added $17 in cost. Smoking and cardiac disease independently increased spending significantly, $511 and $520, respectively.
+
+
+```{r}
+#Predicting Cost
+cost_model <- lm(cost ~ female + smoke + age + cardiac, data = cohort)
+cost_model %>%
+  tbl_regression() %>%
+  add_glance_table(include = c(r.squared, AIC)) %>%
+  modify_caption("Predictive Model for Healthcare Costs")
+```
+
+Table 3: linear regression on cost
+
+# Discussion
+
+Overall, our study revealed significant increased risk in cardiac disease based on smoking status (OR-9.59). These data largely align with decades of established medical literature. We have additionally shown that both smoking and cardiac disease are associated with increased costs annually.  These costs were then verified by linear regression which showed independent risk of increased costs for both smoking and cardiac disease by approximately $500 annually. Taken together, these data reinforce the importance of reducing smoking within the population to decrease morbidity, mortality, and healthcare expenditures. 
+
+There are several large limitations to this study. As this is simulated data from a prior study without clear data sharing or data dictionary many assumptions were made in the interpretation of this data. In particular "cost" is not defined and here assumed to be annual healthcare cost. Addtionally, assumptions based on standard labeling conventions were made for categorical variables but are not necessarily true. Lastly, this is a very basic analysis and additonal interactions/confounders are likely preset. 
+
+# AI Statement:
+
+LLM/AI was not used in the production of this report.
